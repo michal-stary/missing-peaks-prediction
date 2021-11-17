@@ -1,0 +1,13 @@
+*.csv
+*.msp
+data
+\[*
+figures
+gas2vec
+predictions
+matches
+models
+losses
+old
+__*
+.ipynb*
