@@ -14,7 +14,7 @@ def set_metrics(pred_next, y_next):
     
     jaccard = TP/ len(y_next_set.union(pred_next_set)) if len(y_next_set.union(pred_next_set)) != 0 else np.NaN
     
-    return precision, jaccard, recall
+    return precision, jaccard, recall, (TP, FP, FN, (pred_next, y_next))
 
 def metrics_klj(l_pred_indices_per_k, y_indices, up_to_k=None, l=None, j=None):
     
@@ -44,7 +44,7 @@ def metrics_klj(l_pred_indices_per_k, y_indices, up_to_k=None, l=None, j=None):
             # not implemented 
             
             # calculete metrics set
-            precision, jaccard, _ = set_metrics(pred_next, y_next)
+            precision, jaccard, _, _ = set_metrics(pred_next, y_next)
             
             precisions[k, i] = precision
             jaccards[k, i] = jaccard
@@ -52,8 +52,7 @@ def metrics_klj(l_pred_indices_per_k, y_indices, up_to_k=None, l=None, j=None):
     return precisions, jaccards
 
 
-def metrics_klrel(l_pred_indices_per_k, y_indices, X_intens, up_to_k=None, l=None, to_rel_inten=0.2):
-    
+def metrics_klrel(l_pred_indices_per_k, y_indices, X_intens, up_to_k=None, l=None, to_rel_inten=0.2, return_details=False):
     if up_to_k is None:
         up_to_k = len(l_pred_indices_per_k)
     else:
@@ -61,46 +60,44 @@ def metrics_klrel(l_pred_indices_per_k, y_indices, X_intens, up_to_k=None, l=Non
     
     print(f"Selected up to k={up_to_k}, l={l}, to_rel_inten={to_rel_inten}")
     
-    
-    precisions = np.zeros(shape=(up_to_k, l_pred_indices_per_k.shape[1]))
-    jaccards = np.zeros(shape=(up_to_k, l_pred_indices_per_k.shape[1]))
+    n_records = l_pred_indices_per_k.shape[1]
+    precisions = np.zeros(shape=(up_to_k, n_records))
+    jaccards = np.zeros(shape=(up_to_k, n_records))
+    if return_details:
+        details = {"conf": np.zeros(shape=(3, up_to_k, l_pred_indices_per_k.shape[1])),
+                   "all": {"preds": [[None for _ in range(n_records)] for _ in range(up_to_k)], 
+                           "ys": [[None for _ in range(n_records)] for _ in range(up_to_k)]}
+                  }
     
     assert len(y_indices) == len(X_intens)
     
     for k in range(up_to_k):
         for i in range(l_pred_indices_per_k.shape[1]):
-            #HAAAAAAAAACK
-#             if len(y_indices[i]) != len(X_intens[i]):
-#                 X_intens[i] = X_intens[i][:len(y_indices[i])]
-#             if i > 22000:
-#                 precisions[k, i] = np.NaN
-#                 jaccards[k, i] = np.NaN
-#                 continue
+            
+            # skip spectrum if it contains peak unseen in training
             if len(y_indices[i]) != len(X_intens[i]):
                 if k == 0:
-                    print("problem - spectrum with unknown peak skipped")
+                    print("skipped spectrum - unknown peak")
                 precisions[k, i] = np.NaN
                 jaccards[k, i] = np.NaN
                 continue
+        
             assert len(y_indices[i]) == len(X_intens[i])
+
             
+            # skip spectrum with less than k peaks
             if len(y_indices[i]) <= k:
                 precisions[k, i] = np.NaN
                 jaccards[k, i] = np.NaN
                 continue
 
-                
-#             if len(y_indices[i]) != len(X_intens[i]):
-#                 print(len(X_intens[i]), len(y_indices[i]))
-#                 print(X_intens[i], y_indices[i])
-#                 print(i)
-    
-                
+            
+            # parse various representation 
             if isinstance(X_intens[i], list):
                 intens = np.array(X_intens[i])
             else:
                 intens = X_intens[i]
-            # print(intens)    
+            
             # get number of peaks above some intensity of last seen peak
             j = min(np.argmax(intens < intens[k]*to_rel_inten) - k -1 , 20)
             
@@ -114,76 +111,106 @@ def metrics_klrel(l_pred_indices_per_k, y_indices, X_intens, up_to_k=None, l=Non
                 jaccards[k, i] = np.NaN
                 continue
             
+            # set the number of peaks that the model should predict
             if l is None:
                 curr_l = j
             else:
                 curr_l = l
-            # print(np.argmax(intens < intens[k]*to_rel_inten)-k)
-            # print(l_pred_indices_per_k.shape)
+
+            # check if precomputed predictions satisfy the requested number of peaks
+            # skip otherwise
             if l_pred_indices_per_k.shape[2] < curr_l:
                 precisions[k, i] = np.NaN
                 jaccards[k, i] = np.NaN
 
-                print(curr_l)
-                print("too little pred")
+                print("skipped spectrum - too little pred")
                 continue
             
+            
+            # get next l predicted and next j reference (if l was none -> j==l) 
             pred_next = l_pred_indices_per_k[k][i][:curr_l]
             y_next = y_indices[i][k:k+j]    
-                
-            # skip spectra indicated by -1
-            if (l_pred_indices_per_k[k][i][:l] == -1).any():
-                precisions[k, i] = np.NaN
-                jaccards[k, i] = np.NaN
-                print("i")
-                continue
-            # calculate metrics order respecting 
-            # not implemented 
             
+            assert not (l_pred_indices_per_k[k][i][:l] == -1).any() 
+
             # calculete metrics set
-            precision, jaccard, recall = set_metrics(pred_next, y_next)
+            precision, jaccard, _, detail = set_metrics(pred_next, y_next)
             
             precisions[k, i] = precision
             jaccards[k, i] = jaccard
             
-    return precisions, jaccards
-
+            if return_details:
+                details["conf"][:,k,i] = detail[:-1]
+                details["all"]["preds"][k][i] = detail[-1][0]
+                details["all"]["ys"][k][i] = detail[-1][1]
+              
+    out = {"precs": precisions, "jacs": jaccards}
+    if return_details:
+        return {**out, "dets": details}
+    return out
 
 def calc_mean_lj_metrics(l_pred_indices_per_k, y_indices, X_intens, up_to_k=None, \
-                         l=None, j=None, l_rel=None, to_rel_inten=0.2):
+                         l=None, j=None, l_rel=None, to_rel_inten=0.2, mask=None,\
+                         return_details=False):
     
     print(f"Possible k up to {len(l_pred_indices_per_k)}, predict up to {l_pred_indices_per_k.shape[2]} peaks")
+    
     precisions, jaccards = metrics_klj(l_pred_indices_per_k, y_indices, up_to_k=up_to_k, l=l, j=j)
-    mean_prec, mean_jac = get_mean_nan(precisions), get_mean_nan(jaccards)
     
-    print((~np.isnan(precisions)).sum(axis=1))
-    print((~np.isnan(jaccards)).sum(axis=1))
-    precisions_at_int, jaccards_at_int = metrics_klrel(l_pred_indices_per_k, y_indices, X_intens, \
-                                                       up_to_k=up_to_k, l=l_rel, to_rel_inten=to_rel_inten) 
+    if mask is not None:
+        precisions[~mask]= np.NaN
+        jaccards[~mask] = np.NaN
+     
+    # print((~np.isnan(precisions)).sum(axis=1))
+    # print((~np.isnan(jaccards)).sum(axis=1))
+    metrics_rel = metrics_klrel(l_pred_indices_per_k, y_indices, X_intens, \
+                                up_to_k=up_to_k, l=l_rel, to_rel_inten=to_rel_inten,
+                                return_details=return_details) 
     
-    print((~np.isnan(precisions_at_int)).sum(axis=1))
-    print((~np.isnan(jaccards_at_int)).sum(axis=1))
+    if mask is not None:
+        metrics_rel["precs"][~mask] = np.NaN
+        metrics_rel["jacs"][~mask] = np.NaN
+    
+    print((~np.isnan(metrics_rel["precs"])).sum(axis=1))
+    #print((~np.isnan(metrics_rel["jacs"])).sum(axis=1))
     
     
-    mean_prec_int, mean_jac_int = get_mean_nan(precisions_at_int), get_mean_nan(jaccards_at_int)
+    scores = {"mp": get_mean_nan(precisions),
+              "mj": get_mean_nan(jaccards),
+              "mpi": get_mean_nan(metrics_rel["precs"]),
+              "mji": get_mean_nan(metrics_rel["jacs"])
+              }
     
-    return mean_prec, mean_jac, mean_prec_int, mean_jac_int
+    if return_details:
+        return {**scores, **metrics_rel}
+    
+    return scores
 
-def calc_mean_random_metrics(some_pred_per_m, m_pred_per_m, m_y_per_m):
+def calc_mean_random_metrics(some_pred_per_m, m_pred_per_m, m_y_per_m, mask=None, return_details=False):
     precs_m = np.zeros(shape=(len(m_y_per_m), len(m_y_per_m[0])))
     precs_some = np.zeros(shape=(len(m_y_per_m), len(m_y_per_m[0])))
     recs_some = np.zeros(shape=(len(m_y_per_m), len(m_y_per_m[0])))
     jacs_some = np.zeros(shape=(len(m_y_per_m), len(m_y_per_m[0])))
     f1_some = np.zeros(shape=(len(m_y_per_m), len(m_y_per_m[0])))
-
+    
+    n_records = len(m_y_per_m[0])
+    if return_details:
+        details = {"conf": np.zeros(shape=(3, len(m_y_per_m), n_records)),
+                   "all": {"preds": [[None for _ in range(n_records)] for _ in range(len(m_y_per_m))], 
+                           "ys": [[None for _ in range(n_records)] for _ in range(len(m_y_per_m))]}
+                  }
     for m in range(len(m_y_per_m)):
-        for i in range(len(m_y_per_m[m])):
-            # print(m_pred_per_m[m][i], m_y_per_m[m][i])
-            prec, jac, recall = set_metrics(some_pred_per_m[m][i], m_y_per_m[m][i])
-            
-            # if m == 0:
-            #     prec, jac, recall = (1,1,np.nan) if len(some_pred_per_m[m][i]) == 0 else (0,0,np.nan)
+        for i in range(n_records):
+            if mask is not None and not mask[m,i]:
+                precs_some[m][i] = np.NaN
+                recs_some[m][i] = np.NaN
+                jacs_some[m][i] = np.NaN
+                precs_m[m][i] = np.NaN
+                f1_some[m][i] = np.NaN
+                continue
                 
+            prec, jac, recall, detail = set_metrics(some_pred_per_m[m][i], m_y_per_m[m][i])
+                            
             precs_some[m][i] = prec
             recs_some[m][i] = recall
             jacs_some[m][i] = jac
@@ -193,23 +220,24 @@ def calc_mean_random_metrics(some_pred_per_m, m_pred_per_m, m_y_per_m):
             else:
                 f1_some[m][i] = 2*prec*recall/(prec+recall)
             
-            prec_m, _, _ = set_metrics(m_pred_per_m[m][i], m_y_per_m[m][i])
+            prec_m, _, _ ,_= set_metrics(m_pred_per_m[m][i], m_y_per_m[m][i])
             precs_m[m][i] = prec_m
             
-    mean_prec_some = np.nanmean(precs_some, axis=1)
-    mean_rec_some = np.nanmean(recs_some, axis=1)
-    mean_jac_some = np.nanmean(jacs_some, axis=1)
-    mean_f1_some = np.nanmean(f1_some, axis=1)
-    mean_prec= np.nanmean(precs_m, axis=1)
+            if return_details:
+                details["conf"][:,m,i] = detail[:-1]
+                details["all"]["preds"][m][i] = detail[-1][0]
+                details["all"]["ys"][m][i] = detail[-1][1]
     
-    # print(mean_prec)
-    # print(up_to_m)
-    # HACK 
-    # mean_prec_some = mean_prec
-    # mean_rec_some = mean_prec
-    # mean_f1_some = mean_prec
+    scores = {"mp": np.nanmean(precs_some, axis=1),
+              "mr": np.nanmean(recs_some, axis=1),
+              "mj": np.nanmean(jacs_some, axis=1),
+              "mf1": np.nanmean(f1_some, axis=1),
+              "mps": np.nanmean(precs_m, axis=1)
+              }    
     
-    return mean_prec_some, mean_rec_some, mean_jac_some, mean_f1_some, mean_prec
+    if return_details:
+        return {**scores, **details}
+    return scores
 
 
 
@@ -229,10 +257,11 @@ def accuracy_at_k(l_pred_indices_per_k, y_indices, up_to_k=None):
         for i in range(len(y_indices)):
             
             # skip too short spectra
-            if (l_pred_indices_per_k[k, i, :] == -1).any():
+            if (l_pred_indices_per_k[k, i, :] == -1).any() or len(y_indices[i]) <= k:
                 continue
+                
             # safety check 
-            assert len(y_indices[i]) > k
+            assert len(y_indices[i])  > k
             
             
             if l_pred_indices_per_k[k, i, 0] == y_indices[i][k]:
@@ -250,7 +279,7 @@ def accuracy_at_int(l_pred_indices_per_k, y_indices, X_intens, n_bins=10, split=
         for i in range(len(y_indices)):
             
             # skip too short spectra
-            if (l_pred_indices_per_k[k, i, :] == -1).any() or k>=len(X_intens[i]):
+            if (l_pred_indices_per_k[k, i, :] == -1).any() or k >= len(X_intens[i]):
                 continue
             # safety check 
             assert len(y_indices[i]) > k

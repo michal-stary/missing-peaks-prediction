@@ -55,7 +55,8 @@ def load_predictions(p_name, d_name, P_FOLDER):
     return l_pred_indices_per_k, y_indices, X_intens
 
 
-def model_selection(P_FOLDER, d_name, up_to_k, l, j, to_rel_inten=.2, l_rel=None, predictors=None, kw=None):
+def model_selection(P_FOLDER, d_name, up_to_k, l, j, to_rel_inten=.2, \
+                    l_rel=None, predictors=None, kw=None, mask=None, return_details=False):
     best_p_name = None
     best_score = 0
     scores = dict()
@@ -70,16 +71,12 @@ def model_selection(P_FOLDER, d_name, up_to_k, l, j, to_rel_inten=.2, l_rel=None
             l_pred_indices_per_k, y_indices, X_intens = load_predictions(p_name, d_name, P_FOLDER)
 
             met = calc_mean_lj_metrics(l_pred_indices_per_k, y_indices, X_intens, up_to_k=up_to_k,\
-                                      l=l, j=j, to_rel_inten=to_rel_inten, l_rel=l_rel)
+                                      l=l, j=j, to_rel_inten=to_rel_inten, l_rel=l_rel, mask=mask,
+                                      return_details=return_details)
             
-            mean_prec, mean_jac, mean_prec_int, mean_jac_int = met
-            scores[p_name] = {"mp": mean_prec,
-                              "mj": mean_jac,
-                              "mpi": mean_prec_int,
-                              "mji": mean_jac_int,
-                             }
+            scores[p_name] = met
             
-            score = np.array(mean_prec_int).mean()
+            score = np.array(met["mpi"]).mean()
 
             if score > best_score: 
                 best_p_name = p_name
@@ -87,7 +84,7 @@ def model_selection(P_FOLDER, d_name, up_to_k, l, j, to_rel_inten=.2, l_rel=None
     
     return best_p_name, scores
 
-def model_selection_random(P_FOLDER, d_name, predictors=None, kw=None):
+def model_selection_random(P_FOLDER, d_name, predictors=None, kw=None, mask=None, return_details=False):
     best_p_name = None
     best_score = 0
     scores = dict()
@@ -102,17 +99,10 @@ def model_selection_random(P_FOLDER, d_name, predictors=None, kw=None):
             some_pred_per_m, m_pred_per_m, m_y_per_m = load_predictions_random(p_name, d_name, P_FOLDER)
             
             
-            met = calc_mean_random_metrics(some_pred_per_m, m_pred_per_m, m_y_per_m)
+            met = calc_mean_random_metrics(some_pred_per_m, m_pred_per_m, m_y_per_m, mask=mask, return_details=return_details)
+            scores[p_name] = met
             
-            mean_prec_some, mean_rec_some, mean_jac_some, mean_f1_some, mean_prec = met
-            scores[p_name] = {"mpm": mean_prec,
-                              "mp": mean_prec_some,
-                              "mr": mean_rec_some,
-                              "mf1": mean_f1_some,
-                              "mj": mean_jac_some,
-                              }
-            
-            score = np.nanmean(np.array(mean_f1_some))
+            score = np.nanmean(np.array(met["mf1"]))
 
             if score > best_score: 
                 best_p_name = p_name
