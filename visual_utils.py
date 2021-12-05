@@ -19,7 +19,7 @@ COLORS = [
 ]
 def plot_scores(scores, metrics="mpi", x=None, grouper_f=lambda x: "x", \
                 orderer_f =lambda x: x, title=None, save_to_path=None,\
-                xlabel=None, ylabel=None, hue_f=None):
+                xlabel=None, ylabel=None, hue_f=None, y_max=None):
     #sns.set()
     plt.figure(figsize=(7,4))
     styles= ["-", "--",  ":", "-."]
@@ -35,21 +35,28 @@ def plot_scores(scores, metrics="mpi", x=None, grouper_f=lambda x: "x", \
             
         #plt.plot(scores[p_name][metrics])
         if x is None:
-            x=np.arange(len(scores[p_name][metrics]))+1
+            x_=np.arange(len(scores[p_name][metrics]))+1
+        else:
+            x_ = x
         if hue_f is not None:
-            sns.lineplot(y=scores[p_name][metrics], x=x, linestyle=styles[kind], \
+            sns.lineplot(y=scores[p_name][metrics], x=x_, linestyle=styles[kind], \
                          linewidth=.7, color=COLORS[hue_f(p_name)])
         else:
-             sns.lineplot(y=scores[p_name][metrics], x=x, linestyle=styles[kind], \
+             sns.lineplot(y=scores[p_name][metrics], x=x_, linestyle=styles[kind], \
                          linewidth=.7)
 
-    plt.legend(sorted(scores.keys(), key=orderer_f))
+    plt.legend(sorted(scores.keys(), key=orderer_f), loc='lower right')
     plt.title(title)
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
-    plt.ylim(0,1)
+    if y_max is not None:
+        plt.ylim(0,y_max)
+    if x is None:
+        plt.xticks(ticks=np.arange(1,len(scores[p_name][metrics])+1,2))#,fontsize=8, rotation=45)
     plt.grid(color = 'whitesmoke', linestyle = '-')
 
+    
+    
     if save_to_path is not None:
         plt.savefig(save_to_path, bbox_inches='tight')
     plt.show()
@@ -69,7 +76,7 @@ def plot_training(learner):
 def plot_stats(data1D, baseline1D=None, max_len=None, title=None, log_y=False, color="blue", \
                decreasing=False, ylim=None, ylabel=None, xlabel=None, \
                x_factor=1, disable_scientific=False):
-    sns.set()
+    #sns.set()
     plt.figure(figsize=(20,10))
     if title:
         plt.title(title)
@@ -113,7 +120,7 @@ def change_width(ax, new_value) :
         patch.set_x(patch.get_x() + diff * .5)
     
 def plot_spectrum_predictions(ref_doc, k, prob, coder, n_detail=10, plot_full=True, \
-                              log_y=False, save_to_path=None):
+                              log_y=False, save_to_path=None, down_to=0.2):
     """
     Parameters
     ----------
@@ -164,10 +171,11 @@ def plot_spectrum_predictions(ref_doc, k, prob, coder, n_detail=10, plot_full=Tr
         ax1 = sns.barplot(x=base, y=bars, hue=hue, ax=ax1)
 
     
-    # add labels on top of n_details most intensive peaks    
-    max_l_ref = np.sort(bars)[-n_detail]
-    big_ref = np.nonzero( bars >= max_l_ref)[0]
-    
+    # add labels on peaks from kth to 0.2kth intensity wise    
+    # max_l_ref = np.argsort(bars)[-n_detail]
+    #big_ref = np.nonzero( bars >= max_l_ref)[0]
+    kth_intens = bars[coder.text_peak_to_mz(ref_doc.words[top_k_ind[-1]], n_dec)]
+    big_ref = np.nonzero([(bars < kth_intens) & (bars > kth_intens*down_to)])[1]    
     if plot_full:
         plt.sca(ax1)
         for loc in big_ref:
@@ -184,8 +192,12 @@ def plot_spectrum_predictions(ref_doc, k, prob, coder, n_detail=10, plot_full=Tr
     
     
     # add labels on top of n_details most probable peaks
-    max_l = np.sort(bars_pred)[-n_detail]
-    big = np.nonzero( bars_pred >= max_l)[0]    
+    # max_l = np.sort(bars_pred)[-n_detail]
+    # big = np.nonzero( bars_pred >= max_l)[0]  
+    bars_pred_ = bars_pred.copy()
+    bars_pred_[hue_pred == "filtered"] = 0
+    big = np.argsort(bars_pred_)[-len(big_ref):]
+    
     
     if plot_full:
         plt.sca(ax2)
@@ -223,25 +235,41 @@ def plot_spectrum_predictions(ref_doc, k, prob, coder, n_detail=10, plot_full=Tr
     meta = []
     for peak, intensity in zip(ref_doc.words, p_inten):
         meta += [coder.text_peak_to_mz(peak, n_dec)]*int(intensity*1000)
-    focus = max(0, np.quantile(meta, 0.05) -50), np.quantile(meta, 0.95) + 50
+    focus = max(0, np.quantile(meta, 0.05) -25), np.quantile(meta, 0.95) + 25
+    
+    # avoid the highest peak interfering with title
+#     if abs(sum(focus)/2 - np.argmax(bars)) < 50:
+#         big_ref = big_ref[big_ref != np.argmax(bars)]
     
     
     #plot focused 
-    f, (ax1, ax2) = plt.subplots(nrows=2, ncols=1,figsize=(20, 10), sharex=True)
+    f, (ax1, ax2) = plt.subplots(nrows=2, ncols=1,figsize=(18, 9), sharex=True)
     ax1 = sns.barplot(x=base, y=bars, ax=ax1, hue=hue, dodge=False, palette=palette)
     ax2 = sns.barplot(x=base, y=bars_pred, ax=ax2, dodge=False, hue=hue_pred, palette=palette)
     change_width(ax1, .55)    
     change_width(ax2, .55)    
     
-    # add labels on top of peaks
     plt.sca(ax1)
-    for loc in big_ref:
+    # add labels on top of peaks
+    last = -1000
+    for loc in sorted(big_ref):
+        #skip 
+        if loc - last < 2 and abs(bars[loc] - bars[last]) < 0.1:
+            continue
+        if loc > focus[1] or loc < focus[0]:
+            continue
+            
         plt.text(loc, bars[loc]+np.max(bars)/20, loc, ha='center', rotation=90, va='bottom')
+        last = loc
     plt.sca(ax2)
-    for loc in big:
+    last = -1000
+    for loc in sorted(big):
+        #skip 
+        if loc - last < 2 and abs(bars_pred[loc] - bars_pred[last]) < 0.1:
+            continue
         if loc > focus[0] and loc < focus[1]:
             plt.text(loc, bars_pred[loc]+np.max(bars_pred)/20, loc, ha='center', rotation=90, va='bottom')
-    
+        last = loc
     #plot focused
     if log_y:
         ax1.set(yscale="log")
@@ -270,7 +298,7 @@ def plot_spectrum_predictions(ref_doc, k, prob, coder, n_detail=10, plot_full=Tr
     plt.show()
 
 def plot_spectrum_predictions_random(ref_doc, omitted_ind, prob, coder, n_detail=10, \
-                                     plot_full=True, log_y=False, save_to_path=None):
+                                     plot_full=True, log_y=False, save_to_path=None, predicted_peaks=None):
 
     matplotlib.rc_file_defaults()
 
@@ -302,6 +330,8 @@ def plot_spectrum_predictions_random(ref_doc, omitted_ind, prob, coder, n_detail
     hue_pred = np.repeat("filtered", bars_len)
     hue_pred[bars == 0] = "returned"
     for ind in omitted_ind:
+        hue_pred[ind] = "returned"
+    for ind in predicted_peaks:
         hue_pred[ind] = "returned"
     palette ={"filtered": "rosybrown", "returned": "crimson",
               "missing peak": "tab:orange", "regular peak": "tab:blue"}
@@ -335,14 +365,20 @@ def plot_spectrum_predictions_random(ref_doc, omitted_ind, prob, coder, n_detail
     
     
     # add labels on top of n_details most probable peaks
-    max_l = np.sort(bars_pred)[-n_detail]
-    big = np.nonzero( bars_pred >= max_l)[0]    
-    
+    #max_l = np.sort(bars_pred)[-n_detail]
+    #big = np.nonzero( bars_pred >= max_l)[0]
+    bars_pred_ = bars_pred.copy()
+    bars_pred_[hue_pred == "filtered"] = 0
+    if predicted_peaks is None:
+        big = np.argsort(bars_pred_)[-n_detail:]
+    else:
+        big = predicted_peaks
+        
     if plot_full:
         plt.sca(ax2)
         for loc in big:
             plt.text(loc, bars_pred[loc]+np.max(bars_pred)/20, loc, ha='center', rotation=90, va='bottom')
-
+                
         # plot it
         #ax2 = sns.barplot(x=base, y=bars_pred, ax=ax2, color="red")    
         ax2 = sns.barplot(x=base, y=bars_pred, ax=ax2, dodge=False, hue=hue_pred, palette=palette)
@@ -377,11 +413,16 @@ def plot_spectrum_predictions_random(ref_doc, omitted_ind, prob, coder, n_detail
     meta = []
     for peak, intensity in zip(ref_doc.words, p_inten):
         meta += [coder.text_peak_to_mz(peak, n_dec)]*int(intensity*1000)
-    focus = max(0, np.quantile(meta, 0.05) -50), np.quantile(meta, 0.95) + 50
+    focus = max(0, np.quantile(meta, 0.05) -25), np.quantile(meta, 0.95) + 25
     
     
+    # print(big_ref)
+    # avoid the highest peak interfering with title
+    if abs(sum(focus)/2 - np.argmax(bars)) < 50:
+        big_ref = big_ref[big_ref != np.argmax(bars)]
+        
     #plot focused 
-    f, (ax1, ax2) = plt.subplots(nrows=2, ncols=1,figsize=(20, 10), sharex=True)
+    f, (ax1, ax2) = plt.subplots(nrows=2, ncols=1,figsize=(18, 9), sharex=True)
     ax1 = sns.barplot(x=base, y=bars, ax=ax1, hue=hue, dodge=False, palette=palette)
     ax2 = sns.barplot(x=base, y=bars_pred, ax=ax2, dodge=False, hue=hue_pred, palette=palette)
     change_width(ax1, .55)    
@@ -389,13 +430,25 @@ def plot_spectrum_predictions_random(ref_doc, omitted_ind, prob, coder, n_detail
 
     # add labels on top of peaks
     plt.sca(ax1)
-    for loc in omitted_ind:
+    last = -1000
+    for loc in sorted(omitted_ind):
+        #skip 
+        if loc - last < 2 and abs(bars[loc] - bars[last]) < 0.1:
+            continue
+        if loc > focus[1] or loc < focus[0]:
+            continue
+            
         plt.text(loc, bars[loc]+np.max(bars)/20, loc, ha='center', rotation=90, va='bottom')
+        last = loc
     plt.sca(ax2)
-    for loc in big:
+    last = -1000
+    for loc in sorted(big):
+        #skip 
+        if loc - last < 2 and abs(bars_pred[loc] - bars_pred[last]) < 0.1:
+            continue
         if loc > focus[0] and loc < focus[1]:
             plt.text(loc, bars_pred[loc]+np.max(bars_pred)/20, loc, ha='center', rotation=90, va='bottom')
-    
+        last = loc
     #plot focused
     if log_y:
         ax1.set(yscale="log")
@@ -427,6 +480,277 @@ def plot_spectrum_predictions_random(ref_doc, omitted_ind, prob, coder, n_detail
     
     
     
+def plot_spectrum_sample_missing(proc_spec, missing_mz, max_mz=1001, save_to_path=None):    
+    # basic variables
+    base = np.arange(max_mz)
+    p_inten = proc_spec.peaks.intensities
+    
+    # create an y axis array of bars
+    bars = np.zeros(max_mz)
+    for p, mz in enumerate(proc_spec.peaks.mz):
+        bars[int(mz)] = p_inten[p]  
+    
+    # distinguish top_k peaks by color
+    hue = np.repeat("detected peak", max_mz)
+    for mz in missing_mz:
+        hue[int(mz)] = f"missing peak"
+ 
+    palette ={"filtered": "rosybrown", "returned": "crimson", 
+              "missing peak": "tab:orange", "detected peak": "tab:blue"}
+    
+    
+    # add labels on peaks from kth to 0.2kth intensity wise    
+    # max_l_ref = np.argsort(bars)[-n_detail]
+    #big_ref = np.nonzero( bars >= max_l_ref)[0]
+    
+    # kth_intens = bars[coder.text_peak_to_mz(ref_doc.words[top_k_ind[-1]], n_dec)]
+    # big_ref = np.nonzero([(bars < kth_intens) & (bars > kth_intens*down_to)])[1]    
+
+    
+    # get focus area with np.quantile and nasty hack
+    meta = []
+    for mz, intensity in proc_spec.peaks.to_numpy:
+        meta += [mz]*int(intensity*1000)
+    focus = max(0, np.quantile(meta, 0.05) -25), np.quantile(meta, 0.95) + 25
+    
+    # avoid the highest peak interfering with title
+#     if abs(sum(focus)/2 - np.argmax(bars)) < 50:
+#         big_ref = big_ref[big_ref != np.argmax(bars)]
+    
+    
+    #plot focused 
+    f, (ax1) = plt.subplots(nrows=1, ncols=1,figsize=(9, 3))
+    ax1 = sns.barplot(x=base, y=bars, ax=ax1, hue=hue, dodge=False, palette=palette)
+ 
+    change_width(ax1, .55)    
+    
+    plt.sca(ax1)
+    # add labels on top of peaks
+#     last = -1000
+#     for loc in sorted(big_ref):
+#         #skip 
+#         if loc - last < 2 and abs(bars[loc] - bars[last]) < 0.1:
+#             continue
+#         if loc > focus[1] or loc < focus[0]:
+#             continue
+            
+#         plt.text(loc, bars[loc]+np.max(bars)/20, loc, ha='center', rotation=90, va='bottom')
+#         last = loc
+    
+    # ax1.title.set_text(f"Focused reference spectrum of {proc_spec.metadata['name']}")
+    ax1.set_xlim(*focus)
+    ax1.xaxis.set_tick_params(labelbottom=True)
+    ax1.set(ylabel='intensity')
+    ax1.set(xlabel='m/z')
+    
+    plt.sca(ax1)
+    plt.legend(loc='upper left')
+    plt.xticks(ticks=np.arange((focus[0]//10)*10, (focus[1]//10)*10, 20 ))
+    if save_to_path is not None:
+        plt.savefig(save_to_path, bbox_inches='tight')
+    plt.show()
+
+
+    
+def plot_spectrum_sample_metric(proc_spec, missing_mz,little_mz, max_mz=1001, save_to_path=None):    
+    # basic variables
+    base = np.arange(max_mz)
+    p_inten = proc_spec.peaks.intensities
+    
+    # create an y axis array of bars
+    bars = np.zeros(max_mz)
+    for p, mz in enumerate(proc_spec.peaks.mz):
+        bars[int(mz)] = p_inten[p]  
+    
+    # distinguish top_k peaks by color
+    hue = np.repeat("detected peak", max_mz)
+    for mz in missing_mz:
+        hue[int(mz)] = f"target peak"
+        
+    for mz in little_mz:
+        hue[int(mz)] = f"little peak"
+    
+    
+
+    palette ={"little peak": "gainsboro", "returned": "crimson", 
+              "target peak": "tab:orange", "detected peak": "tab:blue"}
+
+    
+    # get focus area with np.quantile and nasty hack
+    meta = []
+    for mz, intensity in proc_spec.peaks.to_numpy:
+        meta += [mz]*int(intensity*1000)
+    focus = max(0, np.quantile(meta, 0.05) -25), np.quantile(meta, 0.95) + 25
+    
+
+    #plot focused 
+    f, (ax1) = plt.subplots(nrows=1, ncols=1,figsize=(9, 3))
+    ax1 = sns.barplot(x=base, y=bars, ax=ax1, hue=hue, dodge=False, palette=palette)
+ 
+    change_width(ax1, .55)    
+    
+    plt.sca(ax1)
+
+    # ax1.title.set_text(f"Focused reference spectrum of {proc_spec.metadata['name']}")
+    ax1.set_xlim(*focus)
+    ax1.xaxis.set_tick_params(labelbottom=True)
+    ax1.set(ylabel='intensity')
+    ax1.set(xlabel='m/z')
+    
+    plt.sca(ax1)
+    plt.legend(loc='upper left')
+    plt.xticks(ticks=np.arange((focus[0]//10)*10, (focus[1]//10)*10, 20 ))
+    if save_to_path is not None:
+        plt.savefig(save_to_path, bbox_inches='tight')
+    plt.show()
+    
+def plot_spectrum_sample(proc_spec, max_mz=1001, save_to_path=None):    
+    # basic variables
+    base = np.arange(max_mz)
+    p_inten = proc_spec.peaks.intensities
+    
+    # create an y axis array of bars
+    bars = np.zeros(max_mz)
+    for p, mz in enumerate(proc_spec.peaks.mz):
+        bars[int(mz)] = p_inten[p]  
+    
+#     # distinguish top_k peaks by color
+    hue = np.repeat("detected peak", max_mz)
+#     for mz in missing_mz:
+#         hue[int(mz)] = f"missing peak"
+ 
+    palette ={"filtered": "rosybrown", "returned": "crimson", 
+              "missing peak": "tab:orange", "detected peak": "tab:blue"}
+    
+    
+    # add labels on peaks from kth to 0.2kth intensity wise    
+    # max_l_ref = np.argsort(bars)[-n_detail]
+    #big_ref = np.nonzero( bars >= max_l_ref)[0]
+    
+    # kth_intens = bars[coder.text_peak_to_mz(ref_doc.words[top_k_ind[-1]], n_dec)]
+    # big_ref = np.nonzero([(bars < kth_intens) & (bars > kth_intens*down_to)])[1]    
+
+    
+    # get focus area with np.quantile and nasty hack
+    meta = []
+    for mz, intensity in proc_spec.peaks.to_numpy:
+        meta += [mz]*int(intensity*1000)
+    focus = max(0, np.quantile(meta, 0.05) -25), np.quantile(meta, 0.95) + 25
+    
+    # avoid the highest peak interfering with title
+#     if abs(sum(focus)/2 - np.argmax(bars)) < 50:
+#         big_ref = big_ref[big_ref != np.argmax(bars)]
+    
+    
+    #plot focused 
+    f, (ax1) = plt.subplots(nrows=1, ncols=1,figsize=(9, 3))
+    ax1 = sns.barplot(x=base, y=bars, ax=ax1, hue=hue, dodge=False, palette=palette)
+ 
+    change_width(ax1, .55)    
+    
+    plt.sca(ax1)
+    # add labels on top of peaks
+#     last = -1000
+#     for loc in sorted(big_ref):
+#         #skip 
+#         if loc - last < 2 and abs(bars[loc] - bars[last]) < 0.1:
+#             continue
+#         if loc > focus[1] or loc < focus[0]:
+#             continue
+            
+#         plt.text(loc, bars[loc]+np.max(bars)/20, loc, ha='center', rotation=90, va='bottom')
+#         last = loc
+    
+    ax1.title.set_text(f"Focused reference spectrum of {proc_spec.metadata['name']}")
+    ax1.set_xlim(*focus)
+    ax1.xaxis.set_tick_params(labelbottom=True)
+    ax1.set(ylabel='intensity')
+    ax1.set(xlabel='m/z')
+    ax1.get_legend().remove()
+    plt.sca(ax1)
+    # plt.legend(None)
+    plt.xticks(ticks=np.arange((focus[0]//10)*10, (focus[1]//10)*10, 20 ))
+    if save_to_path is not None:
+        plt.savefig(save_to_path, bbox_inches='tight')
+    plt.show()
+
+    
+def plot_spectrum_sample_prediction(proc_spec, missing_mz, TP_mz, FP_mz, FN_mz, max_mz=1001, save_to_path=None):    
+    # basic variables
+    base = np.arange(max_mz)
+    p_inten = proc_spec.peaks.intensities
+    
+    # create an y axis array of bars
+    bars = np.zeros(max_mz)
+    for p, mz in enumerate(proc_spec.peaks.mz):
+        bars[int(mz)] = p_inten[p]  
+    
+    # distinguish top_k peaks by color
+    hue = np.repeat("detected", max_mz)
+    for mz in missing_mz:
+        hue[int(mz)] = f"little"
+    for mz in TP_mz:
+        hue[int(mz)] = f"TP"
+    for mz in FP_mz:
+        hue[int(mz)] = f"FP"
+    for mz in FN_mz:
+        hue[int(mz)] = f"FN"
+ 
+    palette ={"FP": "darkorange", "FN": "crimson", "TP": "limegreen",
+              "little": "gainsboro", "detected": "tab:blue"}
+    
+    
+    # add labels on peaks from kth to 0.2kth intensity wise    
+    # max_l_ref = np.argsort(bars)[-n_detail]
+    #big_ref = np.nonzero( bars >= max_l_ref)[0]
+    
+    # kth_intens = bars[coder.text_peak_to_mz(ref_doc.words[top_k_ind[-1]], n_dec)]
+    # big_ref = np.nonzero([(bars < kth_intens) & (bars > kth_intens*down_to)])[1]    
+
+    
+    # get focus area with np.quantile and nasty hack
+    meta = []
+    for mz, intensity in proc_spec.peaks.to_numpy:
+        meta += [mz]*int(intensity*1000)
+    focus = max(0, np.quantile(meta, 0.05) -25), np.quantile(meta, 0.95) + 25
+    
+    # avoid the highest peak interfering with title
+#     if abs(sum(focus)/2 - np.argmax(bars)) < 50:
+#         big_ref = big_ref[big_ref != np.argmax(bars)]
+    
+    
+    #plot focused 
+    f, (ax1) = plt.subplots(nrows=1, ncols=1,figsize=(9, 3))
+    ax1 = sns.barplot(x=base, y=bars, ax=ax1, hue=hue, dodge=False, palette=palette)
+ 
+    change_width(ax1, .75)    
+    
+    plt.sca(ax1)
+    # add labels on top of peaks
+#     last = -1000
+#     for loc in sorted(big_ref):
+#         #skip 
+#         if loc - last < 2 and abs(bars[loc] - bars[last]) < 0.1:
+#             continue
+#         if loc > focus[1] or loc < focus[0]:
+#             continue
+            
+#         plt.text(loc, bars[loc]+np.max(bars)/20, loc, ha='center', rotation=90, va='bottom')
+#         last = loc
+    
+    ax1.title.set_text(f"{proc_spec.metadata['name']}")
+    ax1.set_xlim(*focus)
+    ax1.xaxis.set_tick_params(labelbottom=True)
+    ax1.set(ylabel='intensity')
+    ax1.set(xlabel='m/z')
+    
+    plt.sca(ax1)
+    plt.legend(loc='upper left')
+    plt.xticks(ticks=np.arange((focus[0]//10)*10, (focus[1]//10)*10, 20 ))
+    if save_to_path is not None:
+        plt.savefig(save_to_path, bbox_inches='tight')
+    plt.show()
+
     
     
     
