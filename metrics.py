@@ -161,8 +161,6 @@ def calc_mean_lj_metrics(l_pred_indices_per_k, y_indices, X_intens, up_to_k=None
         precisions[~mask]= np.NaN
         jaccards[~mask] = np.NaN
      
-    # print((~np.isnan(precisions)).sum(axis=1))
-    # print((~np.isnan(jaccards)).sum(axis=1))
     metrics_rel = metrics_klrel(l_pred_indices_per_k, y_indices, X_intens, \
                                 up_to_k=up_to_k, l=l_rel, to_rel_inten=to_rel_inten,
                                 return_details=return_details) 
@@ -171,9 +169,7 @@ def calc_mean_lj_metrics(l_pred_indices_per_k, y_indices, X_intens, up_to_k=None
         metrics_rel["precs"][~mask] = np.NaN
         metrics_rel["jacs"][~mask] = np.NaN
     
-    print((~np.isnan(metrics_rel["precs"])).sum(axis=1))
-    #print((~np.isnan(metrics_rel["jacs"])).sum(axis=1))
-    
+    print((~np.isnan(metrics_rel["precs"])).sum(axis=1))    
     
     scores = {"mp": get_mean_nan(precisions),
               "mj": get_mean_nan(jaccards),
