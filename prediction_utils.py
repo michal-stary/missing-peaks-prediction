@@ -1,4 +1,4 @@
-from matchms import Spectrum
+# from matchms import Spectrum
 import numpy as np
 import os
 
@@ -34,7 +34,3 @@ def predict_spectra(spectrums, new_peaks, l=50):
                        metadata=s.metadata,
                        metadata_harmonization=False)
         
-def get_galaxy_filename(name, directory, prohibited=None):
-    for filename in os.listdir(directory):
-        if name in filename and (prohibited is None or all([x not in filename for x in prohibited])):
-            return directory + "/" + filename
