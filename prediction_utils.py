@@ -1,6 +1,5 @@
-# from matchms import Spectrum
+from matchms import Spectrum
 import numpy as np
-import os
 
 def enhance_spectra(spectrums, new_peaks, l=50):
     assert len(spectrums) == len(new_peaks)
