@@ -1,0 +1,66 @@
+Average Rt(min),Average RI,Metabolite name
+2.484,1224.68,2-Methylmalonic acid_2TMS
+5.333,2071.84,Acetylgalactosamine_4TMS
+5.318,2065.37,Acetylgalactosamine_5TMS isomer 1
+5.386,2088.77,Acetylgalactosamine_5TMS isomer 2
+5.328,2070.17,Acetylglucosamine_5TMS isomer 1
+4.758,1889.38,Allose_5TMS isomer 1
+4.817,1905.14,Allose_5TMS isomer 2
+4.073,1694.58,Arabitol_5TMS
+4.117,1706.16,Arabitol_5TMS
+4.506,1808.41,Arginine_3TMS
+3.384,1494.68,Asparagine_2TMS
+3.921,1655.38,Asparagine_3TMS
+3.697,1594.92,Asparagine_4TMS isomer 1
+3.775,1616.17,Asparagine_4TMS isomer 2
+3.428,1508.92,Aspartic acid_3TMS isomer
+4.48,1800.1,Citric acid_4TMS
+3.554,1549.69,Creatinine_3TMS
+4.53,1815.48,D27-Myristic acid_TMS spectra 1
+2.745,1306.08,D4-Succinic acid_2TMS spectra 1
+4.668,1858.65,Fructose_5TMS isomer 1
+4.701,1868.46,Fructose_5TMS isomer 2
+2.877,1343.47,Fumaric acid_2TMS
+3.474,1523.75,gamma-Aminobutyric acid_3TMS
+4.758,1887.59,Glucose_5TMS isomer 1
+4.89,1927.84,"Glucuro-3,6-lactone_3TMS isomer 2"
+3.743,1608.78,Glutamic acid_3TMS spectra 2
+2.744,1303.46,Glycine_3TMS
+5.458,2114.14,Guanine_3TMS
+4.836,1911.15,Histidine_3TMS
+5.537,2143.41,Histidine_4TMS
+4.453,1793.04,Hypoxanthine_2TMS
+2.691,1288.34,Isoleucine_2TMS
+2.854,1335.48,Itaconic acid_2TMS
+2.615,1266.17,Leucine_2TMS
+4.069,1694.56,Lysine_3TMS
+4.848,1915.11,Lysine_4TMS
+3.322,1476.48,Malic acid_3TMS
+8.709,3529.4,Maltotriose_11TMS isomer 1
+8.851,3576.89,Maltotriose_11TMS isomer 2
+4.876,1922.52,Mannitol_6TMS
+4.739,1881.29,Mannose_5TMS isomer 1
+4.816,1904.12,Mannose_5TMS isomer 2
+3.436,1511.57,Methionine_2TMS
+5.371,2083.64,Myo-inositol_6TMS
+4.207,1730.08,Orotic acid_3TMS
+5.24,2040.06,Palmitic acid_1TMS
+3.79,1620.99,Phenylalanine_2TMS
+2.718,1296.42,Proline_2TMS
+3.446,1514.78,Pyroglutamic acid_2TMS
+3.448,1519.58,Pyroglutamic acid_2TMS
+4.138,1712.06,Ribitol_5TMS
+3.941,1660.99,Ribose_4TMS
+2.907,1352.2,Serine_3TMS
+3.604,1565.54,Serine_4TMS
+4.896,1930.07,Sorbitol_6TMS
+5.832,2247.44,Spermidine_5TMS
+7.086,2740.02,Spermine_6TMS
+5.793,2234.36,Stearic acid_1TMS
+3.94,1659.27,Taurine_3TMS
+3.495,1530.67,Threonic acid_4TMS
+2.993,1377.14,Threonine_3TMS spectra 1
+2.996,1378.3,Threonine_3TMS spectra 2
+4.218,1732.44,trans-Aconitic acid_3TMS
+5.717,2208.86,Tryptophan_3TMS
+4.903,1932.06,Tyrosine_3TMS
